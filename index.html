@@ -144,6 +144,7 @@ function render(items) {
     card.innerHTML = `<div class="lh"><span class="name"></span><span class="badge ${state[0]}">${state[1]}</span></div>
       <div class="key"><span class="k"></span><button class="small cp">Копировать ключ</button></div>
       <div style="color:var(--mut)">Оплачено до: <b style="color:var(--tx)">${fmtDate(it.paidUntil)}</b></div>
+      <div class="conn" style="font-size:12px;color:var(--mut)">Подключение программы: <b class="connTxt" style="color:var(--mut)">проверяю…</b></div>
       <div class="row"><button class="small m30">+30 дней</button><input type="date" class="dt" value="${it.paidUntil || ''}"><button class="small sv">Сохранить дату</button>
       <button class="small tg"></button><button class="small danger rm">Удалить</button></div>`;
     card.querySelector('.name').textContent = it.client || '(без названия)';
@@ -154,6 +155,15 @@ function render(items) {
     const tg = card.querySelector('.tg'); tg.textContent = it.active ? 'Закрыть доступ' : 'Открыть доступ';
     tg.onclick = () => upd(it.id, { active: !it.active });
     card.querySelector('.rm').onclick = () => { if (confirm(`Удалить лицензию «${it.client}»? Программа клиента перестанет работать.`)) deleteDoc(doc(db, 'licenses', it.id)).catch(x => err($('appMsg'), x)); };
+    const connEl = card.querySelector('.connTxt');
+    onSnapshot(doc(db, 'heartbeats', it.id), hb => {
+      if (!hb.exists()) { connEl.textContent = 'ещё ни разу не подключалась'; connEl.style.color = 'var(--mut)'; return; }
+      const d = hb.data(); const ageMs = Date.now() - (d.t || 0); const mins = Math.round(ageMs / 60000);
+      const label = mins < 1 ? 'только что' : mins < 60 ? `${mins} мин назад` : `${Math.round(mins / 60)} ч назад`;
+      const stale = ageMs > 6 * 60 * 60 * 1000;
+      connEl.textContent = `${stale ? 'нет связи, последний раз ' : 'на связи, '}${label}${d.src ? ' (' + d.src + ')' : ''}`;
+      connEl.style.color = stale ? 'var(--err)' : 'var(--ok)';
+    }, () => { connEl.textContent = 'нет доступа к данным подключения'; });
     box.append(card);
   }
 }

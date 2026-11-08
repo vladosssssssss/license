@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Лицензии</title>
+<style>
+:root{--bg:#0a0c10;--p:#11141a;--line:#1d222b;--line2:#2a303b;--tx:#e8eaee;--mut:#8a91a0;--ok:#5cb98a;--warn:#d6a24a;--err:#e07a76;--r:12px;color-scheme:dark}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.45 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;min-height:100vh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+[hidden]{display:none!important}
+.wrap{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:18px;font-weight:600}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.card{background:var(--p);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+label{display:grid;gap:6px;font-size:12px;color:var(--mut)}
+input{width:100%;background:#0a0c10;color:var(--tx);border:1px solid var(--line2);border-radius:8px;padding:9px 11px;font:inherit}
+input:focus{outline:none;border-color:#4a5163}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line2);background:transparent;color:var(--tx);padding:8px 12px}
+button:hover{border-color:#4a5163}
+button.primary{background:#e8eaee;color:#0a0c10;border-color:#e8eaee;font-weight:600}
+button.danger{color:var(--err)}
+button.small{padding:5px 9px;font-size:12px}
+.login{max-width:360px;margin:12vh auto 0;display:grid;gap:12px}
+.msg{color:var(--err);font-size:13px}
+.add{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:16px}
+.list{display:grid;gap:10px}
+.lic{display:grid;gap:10px}
+.lh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.name{font-weight:600;font-size:15px}
+.badge{font-size:12px;padding:3px 9px;border-radius:99px;border:1px solid}
+.badge.on{color:var(--ok);border-color:rgba(92,185,138,.5);background:rgba(92,185,138,.1)}
+.badge.soon{color:var(--warn);border-color:rgba(214,162,74,.5);background:rgba(214,162,74,.1)}
+.badge.off{color:var(--err);border-color:rgba(224,122,118,.5);background:rgba(224,122,118,.1)}
+.key{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--mut);word-break:break-all;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row input[type=date]{width:auto}
+.empty{color:var(--mut);text-align:center;padding:30px 0}
+@media(max-width:560px){.add{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <form id="login" class="card login" hidden>
+    <h1>Вход</h1>
+    <label>Почта<input name="email" type="email" autocomplete="username" required></label>
+    <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+    <p class="msg" id="loginMsg" hidden></p>
+    <button class="primary">Войти</button>
+  </form>
+
+  <div id="app" hidden>
+    <div class="top">
+      <h1>Лицензии</h1>
+      <div class="row"><span id="who" style="color:var(--mut);font-size:12px"></span><button class="small" id="pwBtn">Сменить пароль</button><button class="small" id="out">Выйти</button></div>
+    </div>
+    <form id="addForm" class="card add">
+      <label>Клиент<input name="client" placeholder="Название / имя" required></label>
+      <label>Оплачено до<input name="until" type="date" required></label>
+      <button class="primary">Добавить</button>
+    </form>
+    <form id="pwForm" class="card add" style="grid-template-columns:1fr 1fr auto" hidden>
+      <label>Текущий пароль<input name="old" type="password" autocomplete="current-password" required></label>
+      <label>Новый пароль (от 8 символов)<input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
+      <button class="primary">Сменить</button>
+    </form>
+    <p class="msg" id="appMsg" hidden></p>
+    <div class="list" id="list"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyCiUBgcWzeC1SwEyw925B0JJo0eEiTUnEw",
+  authDomain: "vlad-licenses.firebaseapp.com",
+  projectId: "vlad-licenses",
+  storageBucket: "vlad-licenses.firebasestorage.app",
+  messagingSenderId: "150924010555",
+  appId: "1:150924010555:web:d1a30289569cdec652281e"
+});
+const auth = getAuth(app), db = getFirestore(app);
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const todayStr = () => ymd(new Date());
+const newKey = () => { const a = new Uint8Array(16); crypto.getRandomValues(a); return [...a].map(x => x.toString(16).padStart(2, '0')).join('').replace(/(.{8})(?=.)/g, '$1-'); };
+const addDays = (s, n) => { const base = s && s >= todayStr() ? new Date(s + 'T12:00:00') : new Date(); base.setDate(base.getDate() + n); return ymd(base); };
+const fmtDate = s => s ? s.split('-').reverse().join('.') : '—';
+const daysLeft = s => Math.ceil((new Date(s + 'T23:59:59') - new Date()) / 864e5);
+const err = (el, e) => { el.textContent = e && e.message ? e.message : String(e); el.hidden = false; };
+
+$('login').onsubmit = async e => {
+  e.preventDefault(); $('loginMsg').hidden = true;
+  try { await signInWithEmailAndPassword(auth, e.target.email.value.trim(), e.target.password.value); }
+  catch (x) { err($('loginMsg'), 'Не удалось войти: проверьте почту и пароль'); }
+};
+$('out').onclick = () => signOut(auth);
+$('pwBtn').onclick = () => { $('pwForm').hidden = !$('pwForm').hidden; };
+$('pwForm').onsubmit = async e => {
+  e.preventDefault(); const m = $('appMsg'); m.hidden = true;
+  const u = auth.currentUser, f = e.target;
+  try {
+    await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, f.old.value));
+    await updatePassword(u, f.new.value);
+    f.reset(); f.hidden = true;
+    m.style.color = 'var(--ok)'; m.textContent = 'Пароль изменён'; m.hidden = false;
+    setTimeout(() => { m.hidden = true; m.style.color = ''; }, 3000);
+  } catch (x) { m.style.color = ''; err(m, 'Не удалось сменить пароль: проверьте текущий пароль'); }
+};
+
+let unsub = null;
+onAuthStateChanged(auth, u => {
+  $('login').hidden = !!u; $('app').hidden = !u;
+  if (unsub) { unsub(); unsub = null; }
+  if (!u) return;
+  $('who').textContent = u.email;
+  unsub = onSnapshot(collection(db, 'licenses'), snap => render(snap.docs.map(d => ({ id: d.id, ...d.data() }))), x => err($('appMsg'), x));
+});
+
+$('addForm').onsubmit = async e => {
+  e.preventDefault(); $('appMsg').hidden = true;
+  const f = e.target;
+  try {
+    await setDoc(doc(db, 'licenses', newKey()), { client: f.client.value.trim(), paidUntil: f.until.value, active: true, createdAt: Date.now() });
+    f.reset();
+  } catch (x) { err($('appMsg'), x); }
+};
+
+const upd = (id, patch) => updateDoc(doc(db, 'licenses', id), patch).catch(x => err($('appMsg'), x));
+
+function render(items) {
+  const box = $('list'); box.replaceChildren();
+  items.sort((a, b) => (a.client || '').localeCompare(b.client || ''));
+  if (!items.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'Клиентов пока нет'; box.append(d); return; }
+  for (const it of items) {
+    const valid = it.active && it.paidUntil && it.paidUntil >= todayStr();
+    const left = it.paidUntil ? daysLeft(it.paidUntil) : -1;
+    const card = document.createElement('div'); card.className = 'card lic';
+    const state = !it.active ? ['off', 'Закрыт вручную'] : !valid ? ['off', 'Срок истёк'] : left <= 5 ? ['soon', `Осталось ${left} дн.`] : ['on', 'Активен'];
+    card.innerHTML = `<div class="lh"><span class="name"></span><span class="badge ${state[0]}">${state[1]}</span></div>
+      <div class="key"><span class="k"></span><button class="small cp">Копировать ключ</button></div>
+      <div style="color:var(--mut)">Оплачено до: <b style="color:var(--tx)">${fmtDate(it.paidUntil)}</b></div>
+      <div class="row"><button class="small m30">+30 дней</button><input type="date" class="dt" value="${it.paidUntil || ''}"><button class="small sv">Сохранить дату</button>
+      <button class="small tg"></button><button class="small danger rm">Удалить</button></div>`;
+    card.querySelector('.name').textContent = it.client || '(без названия)';
+    card.querySelector('.k').textContent = it.id;
+    card.querySelector('.cp').onclick = e => { navigator.clipboard.writeText(it.id); e.target.textContent = 'Скопировано'; setTimeout(() => e.target.textContent = 'Копировать ключ', 1500); };
+    card.querySelector('.m30').onclick = () => upd(it.id, { paidUntil: addDays(it.paidUntil, 30), active: true });
+    card.querySelector('.sv').onclick = () => { const v = card.querySelector('.dt').value; if (v) upd(it.id, { paidUntil: v }); };
+    const tg = card.querySelector('.tg'); tg.textContent = it.active ? 'Закрыть доступ' : 'Открыть доступ';
+    tg.onclick = () => upd(it.id, { active: !it.active });
+    card.querySelector('.rm').onclick = () => { if (confirm(`Удалить лицензию «${it.client}»? Программа клиента перестанет работать.`)) deleteDoc(doc(db, 'licenses', it.id)).catch(x => err($('appMsg'), x)); };
+    box.append(card);
+  }
+}
+</script>
+</body>
+</html>

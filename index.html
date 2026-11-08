@@ -151,9 +151,15 @@ function render(items) {
     card.querySelector('.k').textContent = it.id;
     card.querySelector('.cp').onclick = e => { navigator.clipboard.writeText(it.id); e.target.textContent = 'Скопировано'; setTimeout(() => e.target.textContent = 'Копировать ключ', 1500); };
     card.querySelector('.m30').onclick = () => upd(it.id, { paidUntil: addDays(it.paidUntil, 30), active: true });
-    card.querySelector('.sv').onclick = () => { const v = card.querySelector('.dt').value; if (v) upd(it.id, { paidUntil: v }); };
+    card.querySelector('.sv').onclick = () => { const v = card.querySelector('.dt').value; if (v && confirm(`Сохранить дату оплаты «${v}» для «${it.client}»?`)) upd(it.id, { paidUntil: v }); };
     const tg = card.querySelector('.tg'); tg.textContent = it.active ? 'Закрыть доступ' : 'Открыть доступ';
-    tg.onclick = () => upd(it.id, { active: !it.active });
+    tg.onclick = () => {
+      const willClose = it.active;
+      const msg = willClose
+        ? `Закрыть доступ для «${it.client}»? Программа клиента перестанет работать.`
+        : `Открыть доступ для «${it.client}»?`;
+      if (confirm(msg)) upd(it.id, { active: !it.active });
+    };
     card.querySelector('.rm').onclick = () => { if (confirm(`Удалить лицензию «${it.client}»? Программа клиента перестанет работать.`)) deleteDoc(doc(db, 'licenses', it.id)).catch(x => err($('appMsg'), x)); };
     const connEl = card.querySelector('.connTxt');
     onSnapshot(doc(db, 'heartbeats', it.id), hb => {

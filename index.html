@@ -190,11 +190,20 @@ function render(items) {
     }, () => { connEl.textContent = 'нет доступа к данным подключения'; });
     const alertsBox = card.querySelector('.alertsBox');
     onSnapshot(query(collection(db, 'alerts'), where('key', '==', it.id), limit(100)), snap => {
-      const list = snap.docs.map(d => d.data()).sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 20);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.t || 0) - (a.t || 0)).slice(0, 20);
       if (!list.length) { alertsBox.innerHTML = ''; return; }
       const fmtT = t => { try { return new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; } };
-      alertsBox.innerHTML = `<details style="margin-top:4px"><summary style="cursor:pointer;color:var(--err);font-size:12px">История тревог (${list.length})</summary>
-        <div style="margin-top:4px;font-size:11px;color:var(--mut);max-height:160px;overflow:auto">${list.map(a => `<div style="padding:3px 0;border-top:1px solid rgba(255,255,255,.08)">${fmtT(a.t)} — ${(a.message || '').replace(/</g, '&lt;')}</div>`).join('')}</div></details>`;
+      alertsBox.innerHTML = `<details style="margin-top:4px"><summary style="cursor:pointer;color:var(--err);font-size:12px">История тревог (${list.length}) <button type="button" class="small clearAlerts" style="margin-left:6px">Очистить всё</button></summary>
+        <div style="margin-top:4px;font-size:11px;color:var(--mut);max-height:160px;overflow:auto">${list.map(a => `<div class="alertRow" data-id="${a.id}" style="padding:3px 0;border-top:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;gap:8px;align-items:center"><span>${fmtT(a.t)} — ${(a.message || '').replace(/</g, '&lt;')}</span><button type="button" class="rmAlert" data-id="${a.id}" title="Удалить запись" style="flex:none;background:none;border:none;color:var(--mut);cursor:pointer;font-size:13px">✕</button></div>`).join('')}</div></details>`;
+      alertsBox.querySelectorAll('.rmAlert').forEach(btn => {
+        btn.onclick = e => { e.preventDefault(); const id = btn.dataset.id; if (confirm('Удалить эту запись из истории тревог?')) deleteDoc(doc(db, 'alerts', id)).catch(x => err($('appMsg'), x)); };
+      });
+      const clearBtn = alertsBox.querySelector('.clearAlerts');
+      if (clearBtn) clearBtn.onclick = e => {
+        e.preventDefault(); e.stopPropagation();
+        if (!confirm(`Удалить всю историю тревог (${list.length}) для «${it.client}»?`)) return;
+        for (const a of list) deleteDoc(doc(db, 'alerts', a.id)).catch(x => err($('appMsg'), x));
+      };
     }, () => {});
     box.append(card);
   }

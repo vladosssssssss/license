@@ -145,6 +145,7 @@ function render(items) {
       <div class="key"><span class="k"></span><button class="small cp">Копировать ключ</button></div>
       <div style="color:var(--mut)">Оплачено до: <b style="color:var(--tx)">${fmtDate(it.paidUntil)}</b></div>
       <div class="conn" style="font-size:12px;color:var(--mut)">Подключение программы: <b class="connTxt" style="color:var(--mut)">проверяю…</b></div>
+      <div class="connDetail" style="font-size:11px;color:var(--mut);margin-top:2px"></div>
       <div class="row"><button class="small m30">+30 дней</button><input type="date" class="dt" value="${it.paidUntil || ''}"><button class="small sv">Сохранить дату</button>
       <button class="small tg"></button><button class="small danger rm">Удалить</button></div>`;
     card.querySelector('.name').textContent = it.client || '(без названия)';
@@ -162,13 +163,29 @@ function render(items) {
     };
     card.querySelector('.rm').onclick = () => { if (confirm(`Удалить лицензию «${it.client}»? Программа клиента перестанет работать.`)) deleteDoc(doc(db, 'licenses', it.id)).catch(x => err($('appMsg'), x)); };
     const connEl = card.querySelector('.connTxt');
+    const SRC_LABEL = { server: 'сервер', scheduler: 'воронка', engine: 'движок', worker: 'воркер', frontend: 'сайт' };
+    const CORE = ['server', 'scheduler', 'engine', 'worker']; // всегда должны быть, пока сервер запущен
     onSnapshot(doc(db, 'heartbeats', it.id), hb => {
       if (!hb.exists()) { connEl.textContent = 'ещё ни разу не подключалась'; connEl.style.color = 'var(--mut)'; return; }
-      const d = hb.data(); const ageMs = Date.now() - (d.t || 0); const mins = Math.round(ageMs / 60000);
-      const label = mins < 1 ? 'только что' : mins < 60 ? `${mins} мин назад` : `${Math.round(mins / 60)} ч назад`;
-      const stale = ageMs > 6 * 60 * 60 * 1000;
-      connEl.textContent = `${stale ? 'нет связи, последний раз ' : 'на связи, '}${label}${d.src ? ' (' + d.src + ')' : ''}`;
-      connEl.style.color = stale ? 'var(--err)' : 'var(--ok)';
+      const d = hb.data(); const now = Date.now();
+      const rows = Object.keys(SRC_LABEL).map(src => {
+        const t = d['t_' + src];
+        if (!t) return { src, seen: false, stale: null, age: null };
+        const age = now - t;
+        return { src, seen: true, stale: age > 90 * 1000, age };
+      });
+      const ageTxt = ms => { const mins = Math.round(ms / 60000); return mins < 1 ? 'только что' : mins < 60 ? `${mins} мин назад` : `${Math.round(mins / 60)} ч назад`; };
+      const core = rows.filter(r => CORE.includes(r.src));
+      const okCount = core.filter(r => r.seen && !r.stale).length;
+      const missing = core.filter(r => !r.seen || r.stale);
+      const anyCoreSeen = core.some(r => r.seen);
+      let summary, color;
+      if (!anyCoreSeen) { summary = 'ещё ни разу не подключалась'; color = 'var(--mut)'; }
+      else if (missing.length === 0) { summary = `на связи — ${okCount}/${core.length} проверок`; color = 'var(--ok)'; }
+      else { summary = `проблема: ${okCount}/${core.length} проверок — нет «${missing.map(r => SRC_LABEL[r.src]).join('», «')}»`; color = 'var(--err)'; }
+      const detail = rows.map(r => `${SRC_LABEL[r.src]}: ${!r.seen ? 'ещё не было' : (r.stale ? 'нет связи, ' : '') + ageTxt(r.age)}`).join(' · ');
+      connEl.textContent = summary; connEl.style.color = color; connEl.title = detail;
+      const detailEl = card.querySelector('.connDetail'); if (detailEl) detailEl.textContent = detail;
     }, () => { connEl.textContent = 'нет доступа к данным подключения'; });
     box.append(card);
   }
